@@ -1,0 +1,12 @@
+name: test-push
+on:
+  workflow_dispatch:
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          sleep 120
+          curl -s -H "Title: Eurostar Snap: TEST" -H "Priority: urgent" -H "Tags: train" \
+            -d "Cloud test sent while your Mac was closed, nothing booked" "https://ntfy.sh/${{ secrets.NTFY_TOPIC }}"
