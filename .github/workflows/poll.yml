@@ -27,10 +27,12 @@ jobs:
       - name: Check every 5 min
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          PYTHONUNBUFFERED: "1"
         run: |
           end=$((SECONDS + 19800))
           while [ $SECONDS -lt $end ] && [[ "$(TZ=Europe/London date +%F)" < "$LAST_DATE" || "$(TZ=Europe/London date +%F)" == "$LAST_DATE" ]]; do
-            uv run --no-dev python -m snap_watch --config config.cloud.json --state state.json || true
+            echo "$(TZ=Europe/London date +%H:%M:%S) checking"
+            timeout 120 uv run --no-dev python -m snap_watch --config config.cloud.json --state state.json || echo "check failed or timed out ($?)"
             sleep 300
           done
       - uses: actions/cache/save@v4
