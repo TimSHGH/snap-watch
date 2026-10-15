@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 UK = ZoneInfo("Europe/London")
 
 
-def notify(title: str, message: str) -> None:
+def notify(title: str, message: str, url: str = "") -> None:
     """Mac notification + iMessage to ALERT_TO (macOS only), and ntfy.sh push to NTFY_TOPIC if set."""
     if sys.platform == "darwin":
         q = lambda text: json.dumps(text, ensure_ascii=False)
@@ -38,7 +38,7 @@ def notify(title: str, message: str) -> None:
     topic = os.environ.get("NTFY_TOPIC")
     if topic:
         try:
-            requests.post(f"https://ntfy.sh/{topic}", data=message.encode(), headers={"Title": title, "Priority": "urgent", "Tags": "train"}, timeout=15)
+            requests.post(f"https://ntfy.sh/{topic}", data=message.encode(), headers={"Title": title, "Priority": "urgent", "Tags": "train", **({"Click": url} if url else {})}, timeout=15)
         except requests.RequestsError as e:
             logger.warning("ntfy failed: %s", e)
 
@@ -85,8 +85,14 @@ def main() -> None:
     basketed = {d: line_up_ticket(session, cfg, d, current[d]) for d in opened}
     for d in opened:
         logger.info("NEW: %s", describe(d, current[d]))
-        status = "Basket open in Chrome, held ~30 min." if basketed[d] else "Not basketed, search page opened."
-        notify("Eurostar Snap: NEW", f'{describe(d, current[d])}. {status} {search_url(cfg["origin"], cfg["destination"], d, cfg["adult"])}')
+        url = search_url(cfg["origin"], cfg["destination"], d, cfg["adult"])
+        if basketed[d]:
+            status = "Basket open in Chrome, held ~30 min."
+        elif cfg.get("auto_cart"):
+            status = "Basket failed, book now:"
+        else:
+            status = "Book now:"
+        notify("Eurostar Snap: NEW", f"{describe(d, current[d])}. {status} {url}", url)
 
     if all(s["status"] == "could_not_check" for s in current.values()):
         logger.warning("%s: could not check any date: %s", now.strftime("%H:%M"), {d: s.get("reason") for d, s in current.items()})
