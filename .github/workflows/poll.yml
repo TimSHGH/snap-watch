@@ -1,14 +1,21 @@
 name: poll
+# GitHub's own cron is unreliable, so each run loops every 5 min for ~5.5h, then starts the next run.
+# The hourly cron only restarts the chain if it ever breaks; concurrency keeps runs sequential.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
 concurrency:
   group: poll
+permissions:
+  actions: write
+  contents: read
+env:
+  LAST_DATE: "2026-10-21"
 jobs:
   poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -17,11 +24,23 @@ jobs:
           path: state.json
           key: state-${{ github.run_id }}
           restore-keys: state-
-      - run: uv run --no-dev python -m snap_watch --config config.cloud.json --state state.json
+      - name: Check every 5 min
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          end=$((SECONDS + 19800))
+          while [ $SECONDS -lt $end ] && [[ "$(TZ=Europe/London date +%F)" < "$LAST_DATE" || "$(TZ=Europe/London date +%F)" == "$LAST_DATE" ]]; do
+            uv run --no-dev python -m snap_watch --config config.cloud.json --state state.json || true
+            sleep 300
+          done
       - uses: actions/cache/save@v4
         if: always()
         with:
           path: state.json
           key: state-${{ github.run_id }}
+      - name: Start next run
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! "$(TZ=Europe/London date +%F)" > "$LAST_DATE" ]]; then gh workflow run poll -R ${{ github.repository }}; fi
