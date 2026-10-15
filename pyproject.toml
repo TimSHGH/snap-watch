@@ -1,0 +1,12 @@
+[project]
+name = "snap-watch"
+version = "0.1.0"
+description = "Polls Eurostar Snap for newly bookable dates"
+requires-python = ">=3.10"
+dependencies = ["curl_cffi>=0.7", "python-dotenv>=1.0"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

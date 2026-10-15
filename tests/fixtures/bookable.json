@@ -1,0 +1,74 @@
+{
+ "buildId": "x",
+ "props": {
+  "pageProps": {
+   "searchValues": {
+    "outbound": "2026-10-17",
+    "inbound": null,
+    "origin": "7015400",
+    "destination": "8814001",
+    "adult": "1"
+   },
+   "outboundTimeSlots": [
+    {
+     "id": "2026-10-17-outbound-07:04",
+     "departureWindow": {
+      "earliest": "2026-10-17 07:04",
+      "latest": "2026-10-17 13:00"
+     },
+     "fare": {
+      "seats": 9,
+      "prices": {
+       "__typename": "Prices",
+       "adult": 55,
+       "total": 55,
+       "displayPrice": 55
+      },
+      "legs": [
+       {
+        "serviceName": "9114",
+        "timing": {
+         "__typename": "Timing",
+         "departureDate": "2026-10-17",
+         "departureTime": "08:16",
+         "arrivalDate": "2026-10-17",
+         "arrivalTime": "11:13",
+         "duration": 117
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": "2026-10-17-outbound-13:00",
+     "departureWindow": {
+      "earliest": "2026-10-17 13:00",
+      "latest": "2026-10-17 19:34"
+     },
+     "fare": {
+      "seats": 11,
+      "prices": {
+       "__typename": "Prices",
+       "adult": 55,
+       "total": 55,
+       "displayPrice": 55
+      },
+      "legs": [
+       {
+        "serviceName": "9158",
+        "timing": {
+         "__typename": "Timing",
+         "departureDate": "2026-10-17",
+         "departureTime": "19:34",
+         "arrivalDate": "2026-10-17",
+         "arrivalTime": "22:35",
+         "duration": 121
+        }
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}
