@@ -3,10 +3,14 @@ name: poll
 # The hourly cron only restarts the chain if it ever breaks; concurrency keeps runs sequential.
 on:
   workflow_dispatch:
+    inputs:
+      loop_seconds:
+        description: "How long this run loops (test with a small value)"
+        default: "19800"
   schedule:
     - cron: "17 * * * *"
 concurrency:
-  group: poll
+  group: ${{ inputs.loop_seconds == '19800' && 'poll' || github.event_name == 'schedule' && 'poll' || 'poll-test' }}
 permissions:
   actions: write
   contents: read
@@ -29,7 +33,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           PYTHONUNBUFFERED: "1"
         run: |
-          end=$((SECONDS + 19800))
+          end=$((SECONDS + ${{ inputs.loop_seconds || 19800 }}))
           while [ $SECONDS -lt $end ] && [[ "$(TZ=Europe/London date +%F)" < "$LAST_DATE" || "$(TZ=Europe/London date +%F)" == "$LAST_DATE" ]]; do
             echo "$(TZ=Europe/London date +%H:%M:%S) checking"
             timeout 120 uv run --no-dev python -m snap_watch --config config.cloud.json --state state.json || echo "check failed or timed out ($?)"
