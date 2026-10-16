@@ -7,6 +7,7 @@ fingerprint gets the full page, and the server honours the `outbound` date.
 import json
 import logging
 import re
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from curl_cffi import requests
@@ -95,3 +96,8 @@ def create_cart(session: requests.Session, origin: str, destination: str, date: 
         logger.warning("createCart HTTP %s: %s", resp.status_code, resp.text[:200])
         return None
     return resp.json().get("url")
+
+
+def basket_due(last_basketed: Optional[str], now: datetime, cooldown_min: int) -> bool:
+    """True unless this date was basketed less than `cooldown_min` minutes ago."""
+    return last_basketed is None or now - datetime.fromisoformat(last_basketed) >= timedelta(minutes=cooldown_min)

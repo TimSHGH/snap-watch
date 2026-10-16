@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from curl_cffi import requests
 from dotenv import load_dotenv
 
-from .scraper import check_date, create_cart, newly_opened, search_url
+from .scraper import basket_due, check_date, create_cart, newly_opened, search_url
 
 logger = logging.getLogger("snap_watch")
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,22 +25,28 @@ UK = ZoneInfo("Europe/London")
 
 
 def notify(title: str, message: str, url: str = "") -> None:
-    """Mac notification + iMessage to ALERT_TO (macOS only), and ntfy.sh push to NTFY_TOPIC if set."""
-    if sys.platform == "darwin":
-        q = lambda text: json.dumps(text, ensure_ascii=False)
-        subprocess.run(["osascript", "-e", f"display notification {q(message)} with title {q(title)} sound name \"Glass\""], check=False)
-        to = os.environ.get("ALERT_TO")
-        if to:
-            script = f'tell application "Messages" to send {q(f"{title}: {message}")} to participant {q(to)} of (1st account whose service type = iMessage)'
-            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=False)
-            if result.returncode:
-                logger.warning("iMessage failed: %s", result.stderr.strip())
+    """ntfy.sh push to NTFY_TOPIC first (fast, works anywhere), then on macOS a notification and iMessage to ALERT_TO."""
     topic = os.environ.get("NTFY_TOPIC")
     if topic:
         try:
             requests.post(f"https://ntfy.sh/{topic}", data=message.encode(), headers={"Title": title, "Priority": "urgent", "Tags": "train", **({"Click": url} if url else {})}, timeout=15)
         except requests.RequestsError as e:
             logger.warning("ntfy failed: %s", e)
+    if sys.platform != "darwin":
+        return
+    q = lambda text: json.dumps(text, ensure_ascii=False)
+    subprocess.run(["osascript", "-e", f"display notification {q(message)} with title {q(title)} sound name \"Glass\""], check=False)
+    to = os.environ.get("ALERT_TO")
+    if not to:
+        return
+    script = f'with timeout of 15 seconds\ntell application "Messages" to send {q(f"{title}: {message}")} to participant {q(to)} of (1st account whose service type = iMessage)\nend timeout'
+    try:
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=False, timeout=20)
+    except subprocess.TimeoutExpired:
+        logger.warning("iMessage timed out (Messages not responding or Automation prompt unanswered)")
+        return
+    if result.returncode:
+        logger.warning("iMessage failed: %s", result.stderr.strip())
 
 
 def describe(date: str, state: dict) -> str:
@@ -75,19 +81,26 @@ def main() -> None:
         return
 
     cfg = json.loads(args.config.read_text())
-    previous = json.loads(args.state.read_text())["dates"] if args.state.exists() else {}
+    saved_state = json.loads(args.state.read_text()) if args.state.exists() else {}
+    previous = saved_state.get("dates", {})
+    baskets = saved_state.get("baskets", {})
     session = requests.Session(impersonate="chrome")
     current = {d: check_date(session, cfg["origin"], cfg["destination"], d, cfg["adult"]) for d in cfg["dates"]}
     now = datetime.now(UK)
 
     # opened follows cfg["dates"], which is in preference order: basket them all first, then text
     opened = newly_opened(previous, current)
-    basketed = {d: line_up_ticket(session, cfg, d, current[d]) for d in opened}
+    # availability flaps (sells out, reappears); don't open a fresh basket for a date basketed in the last cooldown
+    cooldown = cfg.get("basket_cooldown_min", 30)
+    basketed = {d: basket_due(baskets.get(d), now, cooldown) and line_up_ticket(session, cfg, d, current[d]) for d in opened}
+    baskets.update({d: now.isoformat(timespec="seconds") for d, ok in basketed.items() if ok})
     for d in opened:
         logger.info("NEW: %s", describe(d, current[d]))
         url = search_url(cfg["origin"], cfg["destination"], d, cfg["adult"])
         if basketed[d]:
             status = "Basket open in Chrome, held ~30 min."
+        elif d in baskets:
+            status = f"Basket already opened at {baskets[d][11:16]}, check Chrome. Link:"
         elif cfg.get("auto_cart"):
             status = "Basket failed, book now:"
         else:
@@ -102,7 +115,7 @@ def main() -> None:
 
     # a failed check says nothing about availability, so keep the last real result for that date
     saved = {d: previous[d] if s["status"] == "could_not_check" and d in previous else s for d, s in current.items()}
-    args.state.write_text(json.dumps({"checked_at": now.isoformat(timespec="seconds"), "dates": saved}, indent=2))
+    args.state.write_text(json.dumps({"checked_at": now.isoformat(timespec="seconds"), "dates": saved, "baskets": baskets}, indent=2))
 
 
 if __name__ == "__main__":

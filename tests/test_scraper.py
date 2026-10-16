@@ -1,7 +1,8 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
-from snap_watch.scraper import cart_request, newly_opened, page_props, parse_search_page
+from snap_watch.scraper import basket_due, cart_request, newly_opened, page_props, parse_search_page
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -44,3 +45,10 @@ def test_cart_request_uses_selected_window_fare_and_bounds():
 
 def test_cart_request_for_sold_out_window_is_none():
     assert cart_request(page_props(page("empty.json")), "07:02", 1) is None
+
+
+def test_basket_due_blocks_repeat_within_cooldown_only():
+    now = datetime.fromisoformat("2026-10-16T01:43:00+01:00")
+    assert basket_due(None, now, 30)
+    assert not basket_due("2026-10-16T01:20:00+01:00", now, 30)
+    assert basket_due("2026-10-16T00:35:00+01:00", now, 30)
